@@ -1,14 +1,18 @@
 import requests
 import bs4
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
+from datetime import datetime
+from database import Database
+import json
 
 
 class ParseGb:
-    def __init__(self, start_url):
+    def __init__(self, start_url, database):
         self.start_url = start_url
         self.done_urls = set()
         self.tasks = [self.parse_task(self.start_url, self.pag_parse)]
         self.done_urls.add(self.start_url)
+        self.database = database
 
     def _get_soup(self, *args, **kwargs):
         response = requests.get(*args, **kwargs)
@@ -26,14 +30,51 @@ class ParseGb:
         for task in self.tasks:
             result = task()
             if result:
-                print(1)
+                self.database.create_post(result)
+
+    def extract_post_comments(self, blog_id: int):
+        url = urljoin('https://' + urlparse(self.start_url).hostname,
+                      f'api/v2/comments?commentable_type=Post&commentable_id={blog_id}&order=desc')
+        comments = requests.get(url).json()
+
+        result = self.gb_comments_to_list(comments)
+        return result
+
+    @staticmethod
+    def gb_comments_to_list(comments):
+        result = []
+        for comment in comments:
+            result.append({'author': comment['comment']['user']['full_name'],
+                           'body': comment['comment']['body'],
+                           'gb_id': int(comment['comment']['id']),
+                           'parent_id': int(comment['comment']['parent_id'])
+                           if comment['comment']['parent_id'] else None,
+                           'created_at': datetime.strptime(comment['comment']['created_at'],
+                                                           '%Y-%m-%dT%H:%M:%S.%f%z')})
+            result.extend(ParseGb.gb_comments_to_list(comment['comment']['children']))
+        return result
+
+    @staticmethod
+    def find_image(soup: bs4.BeautifulSoup):
+        try:
+            image_div = soup.find('div', attrs={'class': 'blogpost-content'}).find_all('img')
+            if not image_div:
+                return None
+            else:
+                return image_div[0].get('src')
+        except AttributeError:
+            return None
 
     def post_parse(self, url, soup: bs4.BeautifulSoup) -> dict:
         author_name_tag = soup.find('div', attrs={'itemprop': 'author'})
+        print(url)
         data = {
             'post_data': {
                 'url': url,
                 'title': soup.find('h1', attrs={'class': 'blogpost-title'}).text,
+                'post_datetime': datetime.strptime(soup.find('time', attrs={'class': 'text-md'}).get('datetime'),
+                                                   '%Y-%m-%dT%H:%M:%S%z'),
+                'image': self.find_image(soup)
             },
             'author': {
                 'url': urljoin(url, author_name_tag.parent.get('href')),
@@ -42,7 +83,8 @@ class ParseGb:
             'tags': [{
                 'name': tag.text,
                 'url': urljoin(url, tag.get('href'))
-            } for tag in soup.find_all('a', attrs={'class': 'small'})]
+            } for tag in soup.find_all('a', attrs={'class': 'small'})],
+            'comments': self.extract_post_comments(int(soup.find('comments').get('commentable-id')))
         }
         return data
 
@@ -65,5 +107,5 @@ class ParseGb:
 
 
 if __name__ == '__main__':
-    parser = ParseGb('https://geekbrains.ru/posts/')
+    parser = ParseGb('https://geekbrains.ru/posts/', Database('sqlite:///gb_blog.db'))
     parser.run()
