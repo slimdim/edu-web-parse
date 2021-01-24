@@ -1,9 +1,10 @@
 import requests
 import bs4
+import os
 from urllib.parse import urljoin, urlparse
 from datetime import datetime
 from database import Database
-import json
+from dotenv import load_dotenv
 
 
 class ParseGb:
@@ -107,5 +108,6 @@ class ParseGb:
 
 
 if __name__ == '__main__':
-    parser = ParseGb('https://geekbrains.ru/posts/', Database('sqlite:///gb_blog.db'))
+    load_dotenv('.env')
+    parser = ParseGb('https://geekbrains.ru/posts/', Database(os.getenv('SQL_DB')))
     parser.run()
