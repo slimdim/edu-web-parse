@@ -44,11 +44,14 @@ class AutoyoulaSpider(scrapy.Spider):
         print(1)
 
     @staticmethod
-    def get_author_url(response) -> str:
+    def get_author_url(response):
         script = response.css('script') \
             .re_first(r'(?<=<script>window.transitState = decodeURIComponent\(").*(?="\);</script>)')
-        user_id = str(re.search('youlaId%22%2C%22([0-9|a-zA-Z]+)%22%2C%22avatar', script).group(1))
-        return AutoyoulaSpider.user_url + user_id
+        user_id = re.search('youlaId%22%2C%22([0-9|a-zA-Z]+)%22%2C%22avatar', script)
+        if user_id:
+            return AutoyoulaSpider.user_url + str(user_id.group(1))
+        else:
+            return None
 
     @staticmethod
     def get_specifications(response):
