@@ -29,3 +29,19 @@ class HeadHunterAuthorItem(scrapy.Item):
     area = scrapy.Field()
     description = scrapy.Field()
     author_url = scrapy.Field()
+
+
+class InstagramItem(scrapy.Item):
+    _id = scrapy.Field()
+    data = scrapy.Field()
+    date_parse = scrapy.Field()
+    allow_following = scrapy.Field()
+    image_urls = scrapy.Field()
+
+
+class InstagramTagItem(InstagramItem):
+    pass
+
+
+class InstagramTagPostItem(InstagramItem):
+    pass
