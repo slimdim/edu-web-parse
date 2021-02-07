@@ -45,3 +45,17 @@ class InstagramTagItem(InstagramItem):
 
 class InstagramTagPostItem(InstagramItem):
     pass
+
+
+class InstagramUser(InstagramItem):
+    pass
+
+
+class InstagramFollow(scrapy.Item):
+    _id = scrapy.Field()
+    date_parse = scrapy.Field()
+    user_name = scrapy.Field()
+    user_id = scrapy.Field()
+    follow_type = scrapy.Field()
+    follow_name = scrapy.Field()
+    follow_id = scrapy.Field()

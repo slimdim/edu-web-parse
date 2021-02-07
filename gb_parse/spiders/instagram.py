@@ -1,7 +1,7 @@
 import scrapy
 import json
 import datetime
-from ..items import InstagramTagItem, InstagramTagPostItem
+from ..items import InstagramTagItem, InstagramTagPostItem, InstagramUser, InstagramFollow
 
 
 class InstagramSpider(scrapy.Spider):
@@ -12,10 +12,13 @@ class InstagramSpider(scrapy.Spider):
     api_url = '/graphql/query/'
     query_hash = {
         'tag_posts': "9b498c08113f1e09617a1703c22b2f32",
+        'following': 'd04b0a864b4b54837c0d870b0e77e076',
+        'followed': 'c76146de99bb02f6415203be841dd25a'
     }
 
-    def __init__(self, login, enc_password, tag_list, *args, **kwargs):
+    def __init__(self, login, enc_password, user_list=None, tag_list=None, *args, **kwargs):
         self.tag_list = tag_list
+        self.user_list = user_list
         self.login = login
         self.enc_passwd = enc_password
         super().__init__(*args, **kwargs)
@@ -35,9 +38,92 @@ class InstagramSpider(scrapy.Spider):
             )
         except AttributeError:
             if response.json().get('authenticated'):
-                for tag in self.tag_list:
-                    tag_page = response.urljoin(f'/explore/tags/{tag}/')
-                    yield scrapy.Request(tag_page, callback=self.tag_parse)
+                if self.tag_list:
+                    for tag in self.tag_list:
+                        tag_page = response.urljoin(f'/explore/tags/{tag}/')
+                        yield scrapy.Request(tag_page, callback=self.tag_parse)
+                if self.user_list:
+                    for user in self.user_list:
+                        yield response.follow(f'/{user}', callback=self.user_parse)
+
+    def user_parse(self, response):
+        user_data = self.js_data_extract(response)['entry_data']['ProfilePage'][0]['graphql']['user']
+        yield InstagramUser(
+            date_parse=datetime.datetime.utcnow(),
+            data=user_data
+        )
+
+        yield from self.get_follow_request(response, user_data)
+
+    def get_follow_request(self, response, user_data, follow_query=None):
+        if not follow_query:
+            follow_query = {
+                'id': user_data['id'],
+                'first': 2,
+            }
+
+        url = f'/graphql/query/?query_hash={self.query_hash["followed"]}&variables={json.dumps(follow_query)}'
+        yield response.follow(
+            url,
+            callback=self.get_api_followed,
+            cb_kwargs={'user_data': user_data})
+
+        url = f'/graphql/query/?query_hash={self.query_hash["following"]}&variables={json.dumps(follow_query)}'
+        yield response.follow(
+            url,
+            callback=self.get_api_follow,
+            cb_kwargs={'user_data': user_data})
+
+    def get_api_follow(self, response, user_data):
+        data = response.json()
+        follow_type = 'following'
+        yield from self.get_follow_item(user_data,
+                                        data['data']['user']['edge_follow']['edges'],
+                                        follow_type)
+        if data['data']['user']['edge_follow']['page_info']['has_next_page']:
+            follow_query = {
+                'id': user_data['id'],
+                'first': 100,
+                'after': data['data']['user']['edge_follow']['page_info']['end_cursor'],
+            }
+            yield from self.get_follow_request(response, user_data, follow_query)
+
+    def get_api_followed(self, response, user_data):
+        data = response.json()
+        follow_type = 'followed'
+        yield from self.get_follow_item(user_data,
+                                        data['data']['user']['edge_followed_by']['edges'],
+                                        follow_type)
+        if data['data']['user']['edge_followed_by']['page_info']['has_next_page']:
+            follow_query = {
+                'id': user_data['id'],
+                'first': 100,
+                'after': data['data']['user']['edge_followed_by']['page_info']['end_cursor'],
+            }
+            yield from self.get_follow_request(response, user_data, follow_query)
+
+    def get_follow_item(self, user_data, follow_users_data, follow_type):
+        for user in follow_users_data:
+            if follow_type == 'followed':
+                yield InstagramFollow(
+                    user_id=user_data['id'],
+                    user_name=user_data['username'],
+                    follow_type='followed_by',
+                    follow_id=user['node']['id'],
+                    follow_name=user['node']['username']
+                )
+            else:
+                yield InstagramFollow(
+                    user_id=user_data['id'],
+                    user_name=user_data['username'],
+                    follow_type='following',
+                    follow_id=user['node']['id'],
+                    follow_name=user['node']['username']
+                )
+            yield InstagramUser(
+                date_parse=datetime.datetime.utcnow(),
+                data=user['node']
+            )
 
     def tag_parse(self, response):
         json_response = self.js_data_extract(response)
