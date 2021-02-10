@@ -12,6 +12,6 @@ if __name__ == '__main__':
     crawler_process.crawl(InstagramSpider,
                           login=os.getenv('LOGIN'),
                           enc_password=os.getenv('ENC_PASSWORD'),
-                          # tag_list=['python', 'client', 'developer', 'insta'],
-                          user_list=['mighty_cyborg', 'buytetmaxime'])
+                          start_user='johngalt.94',
+                          end_user='sl_voda')
     crawler_process.start()
