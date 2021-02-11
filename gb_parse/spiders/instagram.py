@@ -20,7 +20,7 @@ class InstagramSpider(scrapy.Spider):
         self.tag_list = tag_list
         self.user_list = user_list
         self.login = login
-        self.enc_passwd = enc_password
+        self.enc_password = enc_password
         super().__init__(*args, **kwargs)
 
     def parse(self, response, **kwargs):
@@ -32,7 +32,7 @@ class InstagramSpider(scrapy.Spider):
                 callback=self.parse,
                 formdata={
                     'username': self.login,
-                    'enc_password': self.enc_passwd,
+                    'enc_password': self.enc_password,
                 },
                 headers={'x-CSRFToken': js_data['config']['csrf_token']}
             )

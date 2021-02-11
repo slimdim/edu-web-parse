@@ -17,7 +17,7 @@ class MongoSavePipeline:
         self.db_client = pymongo.MongoClient(os.getenv("MONGO_DB"))
 
     def process_item(self, item, spider):
-        db = self.db_client["gb_parse_instagram"]
+        db = self.db_client["gb_parse_handshake"]
         collection = db[type(item).__name__]
         collection.insert_one(item)
         return item
